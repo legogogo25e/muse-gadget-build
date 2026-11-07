@@ -1,0 +1,147 @@
+# Build muse-gadget-sdk ESP32 firmware with GitHub Actions.
+#
+# Upstream: https://github.com/facebookincubator/muse-gadget-sdk
+# Toolchain: espressif/idf:v6.0.3  (README requires ESP-IDF v6.0.3 exactly)
+# Default board: devkit = ESP32-C5 DevKitC-1, the upstream default target.
+# No SDK token is baked into the firmware. Set it later over serial/BLE.
+#
+# How to run (see README.md):
+#   Actions > Build ESP32 firmware > Run workflow > pick board / upstream_ref / version
+#   -- or push a change to this workflow file, which also triggers a run.
+name: Build ESP32 firmware
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/build-esp32.yml"
+  workflow_dispatch:
+    inputs:
+      board:
+        description: "Board to build (upstream build matrix name)"
+        required: true
+        default: "devkit"
+        type: choice
+        options:
+          - devkit
+          - espressif-s3-devkitc-1
+          - waveshare-c6-lcd-147
+          - c6-nopsram
+          - ideaspark
+          - muse-waveshare-s3-175c
+      upstream_ref:
+        description: "muse-gadget-sdk ref to build (branch, tag or full commit SHA)"
+        required: true
+        default: "463bd2a05380fea4211b0099ad0f70933c108b20"
+        type: string
+      project_version:
+        description: "Firmware version (PROJECT_VER, e.g. 1.0.0; OTA skips if not newer)"
+        required: true
+        default: "1.0.0"
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build ${{ inputs.board || 'devkit' }}
+    runs-on: ubuntu-latest
+    container: espressif/idf:v6.0.3
+    timeout-minutes: 60
+    env:
+      BOARD: ${{ inputs.board || 'devkit' }}
+      UPSTREAM_REF: ${{ inputs.upstream_ref || '463bd2a05380fea4211b0099ad0f70933c108b20' }}
+      PROJECT_VER: ${{ inputs.project_version || '1.0.0' }}
+    steps:
+      - name: Checkout this repo
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Checkout muse-gadget-sdk
+        uses: actions/checkout@v4
+        with:
+          repository: facebookincubator/muse-gadget-sdk
+          ref: ${{ env.UPSTREAM_REF }}
+          path: upstream
+          persist-credentials: false
+
+      - name: Map board to target and sdkconfig defaults
+        id: board
+        run: |
+          case "$BOARD" in
+            devkit)
+              TARGET=esp32c5
+              DEFAULTS="sdkconfig.defaults"
+              ;;
+            espressif-s3-devkitc-1)
+              TARGET=esp32s3
+              DEFAULTS="sdkconfig.defaults;devices/sdkconfig.espressif-s3-devkitc-1"
+              ;;
+            waveshare-c6-lcd-147)
+              TARGET=esp32c6
+              DEFAULTS="sdkconfig.defaults;devices/sdkconfig.waveshare-c6-lcd-147"
+              ;;
+            c6-nopsram)
+              TARGET=esp32c6
+              DEFAULTS="sdkconfig.defaults;devices/sdkconfig.c6-nopsram"
+              ;;
+            ideaspark)
+              TARGET=esp32
+              DEFAULTS="sdkconfig.defaults;devices/sdkconfig.ideaspark"
+              ;;
+            muse-waveshare-s3-175c)
+              TARGET=esp32s3
+              DEFAULTS="sdkconfig.defaults;devices/sdkconfig.muse;devices/sdkconfig.muse-waveshare-s3-175c"
+              ;;
+            *)
+              echo "::error::unknown board $BOARD"
+              exit 1
+              ;;
+          esac
+          echo "target=$TARGET" >> "$GITHUB_OUTPUT"
+          echo "defaults=$DEFAULTS" >> "$GITHUB_OUTPUT"
+          echo "board=$BOARD target=$TARGET defaults=$DEFAULTS"
+
+      - name: Build firmware
+        working-directory: upstream/esp32
+        run: |
+          . "$IDF_PATH/export.sh" > /dev/null
+          idf.py --version
+          idf.py -B "build-$BOARD" \
+            -DIDF_TARGET="${{ steps.board.outputs.target }}" \
+            -DSDKCONFIG="build-$BOARD/sdkconfig" \
+            -DSDKCONFIG_DEFAULTS="${{ steps.board.outputs.defaults }}" \
+            -DPROJECT_VER="$PROJECT_VER" \
+            build
+
+      - name: Record build info
+        working-directory: upstream/esp32
+        run: |
+          {
+            echo "board=$BOARD"
+            echo "target=${{ steps.board.outputs.target }}"
+            echo "upstream_ref=$UPSTREAM_REF"
+            echo "upstream_sha=$(git -C .. rev-parse HEAD)"
+            echo "project_version=$PROJECT_VER"
+            echo "idf_version=$(idf.py --version 2>/dev/null || echo unknown)"
+            echo "built_at_utc=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            echo "github_run=$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+          } > build-info.txt
+          ls -lh "build-$BOARD/muse-gadget.bin" "build-$BOARD/bootloader/bootloader.bin" "build-$BOARD/partition_table/partition-table.bin" "build-$BOARD/flasher_args.json"
+          sha256sum "build-$BOARD/muse-gadget.bin" | tee -a build-info.txt
+          cat build-info.txt
+
+      - name: Upload firmware artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: firmware-${{ env.BOARD }}-${{ env.PROJECT_VER }}
+          path: |
+            upstream/esp32/build-${{ env.BOARD }}/muse-gadget.bin
+            upstream/esp32/build-${{ env.BOARD }}/bootloader/bootloader.bin
+            upstream/esp32/build-${{ env.BOARD }}/partition_table/partition-table.bin
+            upstream/esp32/build-${{ env.BOARD }}/flasher_args.json
+            upstream/esp32/build-info.txt
+          if-no-files-found: error
+          retention-days: 30
