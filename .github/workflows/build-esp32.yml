@@ -119,6 +119,7 @@ jobs:
       - name: Record build info
         working-directory: upstream/esp32
         run: |
+          . "$IDF_PATH/export.sh" > /dev/null
           {
             echo "board=$BOARD"
             echo "target=${{ steps.board.outputs.target }}"
