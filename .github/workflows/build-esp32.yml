@@ -2,7 +2,7 @@
 # the latest firmware to GitHub Pages so it can be fetched without login
 # (e.g. by the ESP32 web flasher space, or by an OTA client).
 #
-# Upstream: https://github.com/facebookincubator/muse-gadget-sdk
+# Upstream fork: https://github.com/legogogo25e/muse-gadget-sdk (forked from facebookincubator/muse-gadget-sdk)
 # Toolchain: espressif/idf:v6.0.3  (README requires ESP-IDF v6.0.3 exactly)
 # Default board: devkit = ESP32-C5 DevKitC-1, the upstream default target.
 # No SDK token is baked into the firmware. Set it later over serial/BLE.
@@ -76,7 +76,7 @@ jobs:
       - name: Checkout muse-gadget-sdk
         uses: actions/checkout@v4
         with:
-          repository: facebookincubator/muse-gadget-sdk
+          repository: legogogo25e/muse-gadget-sdk
           ref: ${{ env.UPSTREAM_REF }}
           path: upstream
           persist-credentials: false
