@@ -1021,7 +1021,7 @@
         downloaded.forEach(function (d, i) { if (!useLocal) setFileStat(i, "Flashed ✓", "ok"); });
         overallProgress(fracs.map(function () { return 1; }), sizes);
         flashTerm.line("All files written. Hard-resetting the device…", "ok");
-        return loader.hardReset().catch(function () {});
+        return loader.after("hard_reset").catch(function () {});
       }).then(function () {
         return transport.disconnect().catch(function () {});
       }).then(function () { return true; })
@@ -1294,7 +1294,7 @@
             reportProgress: function (fi, w, t) { if (t) flashTerm.line(tag + " Writing file " + (fi + 1) + ": " + Math.round(w / t * 100) + "%", "dim"); }
           }).then(function () { return chip; });
         }).then(function (chip) {
-          return loader.hardReset().catch(function () {}).then(function () { return transport.disconnect().catch(function () {}); }).then(function () { return chip; });
+          return loader.after("hard_reset").catch(function () {}).then(function () { return transport.disconnect().catch(function () {}); }).then(function () { return chip; });
         }).catch(function (e) {
           return transport.disconnect().catch(function () {}).then(function () { throw e; });
         });
