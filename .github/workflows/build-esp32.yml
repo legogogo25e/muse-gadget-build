@@ -43,6 +43,8 @@ on:
           - c6-nopsram
           - ideaspark
           - muse-waveshare-s3-175c
+          - yd-esp32-s3-classic
+          - waveshare-s3-geek
       upstream_ref:
         description: "muse-gadget-sdk ref to build (branch, tag or full commit SHA)"
         required: true
@@ -108,6 +110,14 @@ jobs:
             muse-waveshare-s3-175c)
               TARGET=esp32s3
               DEFAULTS="sdkconfig.defaults;devices/sdkconfig.muse;devices/sdkconfig.muse-waveshare-s3-175c"
+              ;;
+            yd-esp32-s3-classic)
+              TARGET=esp32s3
+              DEFAULTS="sdkconfig.defaults;devices/sdkconfig.yd-esp32-s3-classic"
+              ;;
+            waveshare-s3-geek)
+              TARGET=esp32s3
+              DEFAULTS="sdkconfig.defaults;devices/sdkconfig.waveshare-s3-geek"
               ;;
             *)
               echo "::error::unknown board $BOARD"
