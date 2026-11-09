@@ -182,10 +182,10 @@ jobs:
       BOARD: ${{ inputs.board || 'devkit' }}
       PROJECT_VER: ${{ inputs.project_version || '1.0.0' }}
     steps:
-    - name: Checkout this repo (for flasher page)
-            uses: actions/checkout@v4
-                    with:
-                              persist-credentials: false
+      - name: Checkout this repo (for flasher page)
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - name: Download firmware artifact
         uses: actions/download-artifact@v4
         with:
@@ -313,8 +313,8 @@ jobs:
           pathlib.Path("pages/index.html").write_text(index)
           print(json.dumps(root_manifest, indent=2))
           PY
-          - name: Include web flasher page
-          run: cp flasher.html pages/flasher.html
+      - name: Include web flasher page
+        run: cp flasher.html pages/flasher.html
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v4
