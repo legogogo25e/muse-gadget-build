@@ -155,6 +155,8 @@ jobs:
             upstream/esp32/build-${{ env.BOARD }}/muse-gadget.bin
             upstream/esp32/build-${{ env.BOARD }}/bootloader/bootloader.bin
             upstream/esp32/build-${{ env.BOARD }}/partition_table/partition-table.bin
+            upstream/esp32/build-${{ env.BOARD }}/ota_data_initial.bin
+            upstream/esp32/build-${{ env.BOARD }}/phy_init_data.bin
             upstream/esp32/build-${{ env.BOARD }}/flasher_args.json
             upstream/esp32/build-info.txt
           if-no-files-found: error
@@ -217,8 +219,13 @@ jobs:
           if not flash_files:
               raise SystemExit("flasher_args.json has no flash_files mapping")
 
-          # Resolve the three files we publish, by the basename in flash_files.
+          # Resolve the files we publish, by the basename in flash_files.
+          # All five matter: ota_data_initial.bin resets the OTA slot
+          # selection to ota_0 (without it a board that previously booted
+          # from ota_1 would keep booting the old firmware), and
+          # phy_init_data.bin holds the PHY calibration defaults.
           wanted = {"bootloader.bin": None, "partition-table.bin": None,
+                    "ota_data_initial.bin": None, "phy_init_data.bin": None,
                     "muse-gadget.bin": None}
           for addr, path in flash_files.items():
               base = os.path.basename(str(path))
@@ -241,6 +248,8 @@ jobs:
           src = {
               "bootloader.bin": find("bootloader.bin"),
               "partition-table.bin": find("partition-table.bin"),
+              "ota_data_initial.bin": find("ota_data_initial.bin"),
+              "phy_init_data.bin": find("phy_init_data.bin"),
               "muse-gadget.bin": find("muse-gadget.bin"),
           }
           for name, addr in wanted.items():
