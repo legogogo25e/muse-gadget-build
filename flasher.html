@@ -287,7 +287,7 @@
             <div class="board-sum" id="boardSummaryWrap">
               <h3>Boards in this manifest · build status</h3>
               <div id="boardSummary"><span style="color:var(--muted);font-size:13px;">Waiting for manifest…</span></div>
-              <p class="hint" style="margin-top:8px;">Development target: <a href="https://github.com/legogogo25e/muse-gadget" target="_blank" rel="noopener">legogogo25e/muse-gadget</a>. Currently published firmware is the <strong>devkit / ESP32-C5</strong> build. An ESP32-S3 board will show “No match” here until an S3 board (e.g. <span class="mono">espressif-s3-devkitc-1</span>) is built in the workflow — do not flash C5 firmware onto an S3 board.</p>
+              <p class="hint" style="margin-top:8px;">Development target: <a href="https://github.com/legogogo25e/muse-gadget" target="_blank" rel="noopener">legogogo25e/muse-gadget</a>. The table above lists every board in the published manifest with its target chip; chip detection must match a board entry before flashing is enabled, so firmware built for one chip family is never written to a board with a different chip.</p>
             </div>
             <p class="hint">Addresses, sizes and SHA-256 hashes all come from each build's own <span class="mono">flasher_args.json</span>, published via <a href="https://legogogo25e.github.io/muse-gadget-build/manifest.json" target="_blank" rel="noopener">manifest.json</a>. Every file is SHA-256 verified after download — a mismatch aborts the flash.</p>
           </section>
@@ -400,6 +400,10 @@
               </div>
             </div>
             <div class="terminal" id="monTerm" aria-live="polite"></div>
+            <div class="alert" id="romDiag" style="margin-top:12px;margin-bottom:0;">
+              <strong>Only the ROM banner arrived — no firmware boot log</strong>
+              <span>The monitor received the <span class="mono">ESP-ROM:…</span> line, so the chip did reset and its ROM ran — but no ESP-IDF / application output followed within 6 seconds. That pattern means the app never started logging: it may have halted before ESP-IDF init, or the flashed image may not match this chip. Try: press “Reset device” and watch again; confirm the firmware was built for this board's target chip (see the Firmware card); make sure nothing is holding GPIO0 / BOOT or EN. If the board's LED is breathing (advertising), the app may in fact be running — check for its BLE name with a scanner app such as nRF Connect rather than relying on this monitor alone.</span>
+            </div>
             <div class="send-row">
               <input type="text" id="sendInput" placeholder="Text to send to the device, e.g. >sdk_token=… (Enter to send)" autocomplete="off" spellcheck="false" />
               <select id="sendEnding" style="min-height:42px;">
@@ -409,7 +413,7 @@
               </select>
               <button id="btnSend" disabled>Send</button>
             </div>
-            <p class="hint">The monitor and the flasher share one serial port — only one can be open at a time. When the device reboots the port may vanish briefly; the monitor retries a few times on its own, otherwise click "Open monitor" again.</p>
+            <p class="hint">The monitor and the flasher share one serial port — only one can be open at a time. When the device reboots or is replugged, the port can vanish for a few seconds; the monitor fully releases the port and retries with backoff for about 30 seconds, re-attaching automatically if the board re-enumerates as a new USB device.</p>
           </section>
         </div>
       </div>
@@ -637,10 +641,25 @@
         }).catch(function () {});
         navigator.serial.addEventListener("disconnect", function (e) {
           if (state.port && e.target === state.port) {
+            if (state.busy === "monitoring") {
+              // A replug / re-enumeration looks exactly like this. Do not tear
+              // the monitor down: flag the port as gone and let the monitor's
+              // retry loop re-find it via getPorts() when it comes back.
+              monitor.portGone = true;
+              if (monitor.wakeRetry) monitor.wakeRetry();
+              flashTerm.line("Device disconnected from USB while monitoring — the monitor will re-attach automatically if it comes back.", "err");
+              monTerm.line("[" + nowTime() + "] USB disconnect detected; waiting for the device to re-appear…", "dim");
+              return;
+            }
             flashTerm.line("Device disconnected from USB.", "err");
-            if (state.busy === "monitoring") stopMonitor(true);
             state.port = null;
             setConn("err", "Device disconnected", "Plug the USB cable back in, then click \"Connect device\".");
+          }
+        });
+        navigator.serial.addEventListener("connect", function () {
+          if (state.busy === "monitoring" && monitor.portGone && monitor.wakeRetry) {
+            monTerm.line("[" + nowTime() + "] A USB serial device appeared; retrying the connection now…", "dim");
+            monitor.wakeRetry();
           }
         });
       } else {
@@ -1089,7 +1108,114 @@
     };
 
     /* ---------------- serial monitor + acceptance ---------------- */
-    var monitor = { on: false, reader: null, writer: null, keepAlive: false, retry: 0 };
+    var monitor = {
+      on: false, reader: null, writer: null, retry: 0, gen: 0,
+      portGone: false,           // OS reported our port disconnected (replug / re-enumeration)
+      usbVid: null, usbPid: null, // identity of the monitored port, used to re-find it
+      wakeRetry: null,           // resolves the current retry wait early (on USB "connect")
+      romTimer: null, sawRom: false
+    };
+    // Backoff between reconnect attempts: ~32 s of patience in total, so a
+    // board that re-enumerates a few seconds after reset / replug is caught.
+    var MONITOR_RETRY_DELAYS = [800, 1500, 2500, 4000, 6000, 8500, 8500];
+
+    function teardownMonitorPort(port) {
+      // Release BOTH stream locks and wait for close() to actually finish.
+      // The old retry path only released the reader and fired close() without
+      // awaiting it, so every reopen raced a half-closed port (writer lock
+      // still held) and all 6 attempts failed the same way.
+      var r = monitor.reader; monitor.reader = null;
+      var w = monitor.writer; monitor.writer = null;
+      var chain = Promise.resolve();
+      if (r) {
+        chain = chain.then(function () { return r.cancel(); }).catch(function () {})
+          .then(function () { try { r.releaseLock(); } catch (e) {} });
+      }
+      if (w) {
+        chain = chain.then(function () { try { w.releaseLock(); } catch (e) {} });
+      }
+      if (port) {
+        chain = chain.then(function () { return port.close(); }).catch(function () {});
+      }
+      return chain;
+    }
+
+    function refindMonitorPort() {
+      // Only needed after a real disconnect: the old port object is dead, so
+      // look the board up again among the granted ports by USB VID/PID.
+      if (!monitor.portGone) return Promise.resolve(!!state.port);
+      if (!navigator.serial || !navigator.serial.getPorts) return Promise.resolve(false);
+      return navigator.serial.getPorts().then(function (ports) {
+        for (var i = 0; i < ports.length; i++) {
+          var info = ports[i].getInfo ? ports[i].getInfo() : {};
+          if (monitor.usbVid != null && info.usbVendorId === monitor.usbVid &&
+              (monitor.usbPid == null || info.usbProductId === monitor.usbPid)) {
+            if (ports[i] !== state.port) {
+              state.port = ports[i];
+              monTerm.line("[" + nowTime() + "] Device re-appeared on USB — re-attached to the new port automatically.", "acc");
+            }
+            monitor.portGone = false;
+            return true;
+          }
+        }
+        return false;
+      }).catch(function () { return false; });
+    }
+
+    function monitorRetryWait(ms) {
+      return new Promise(function (resolve) {
+        var done = false;
+        var t = setTimeout(finish, ms);
+        function finish() {
+          if (done) return;
+          done = true; clearTimeout(t);
+          if (monitor.wakeRetry === finish) monitor.wakeRetry = null;
+          resolve();
+        }
+        monitor.wakeRetry = finish;
+      });
+    }
+
+    function scheduleMonitorRetry(err) {
+      if (!monitor.on) return;
+      var gen = ++monitor.gen;
+      var port = state.port;
+      monitor.retry++;
+      if (monitor.retry > MONITOR_RETRY_DELAYS.length) {
+        monTerm.line(monitor.portGone
+          ? "Monitor stopped after ~30 s of retries — the device never came back on USB. Replug the cable, then click \"Open monitor\" again."
+          : "Monitor stopped after ~30 s of retries — the port would not reopen. Replug the cable if needed, then click \"Open monitor\" again.", "err");
+        stopMonitor(true);
+        return;
+      }
+      var delay = MONITOR_RETRY_DELAYS[monitor.retry - 1];
+      if (err && err.message) monTerm.line("Serial error: " + err.message, "dim");
+      monTerm.line("Serial interrupted; reconnecting in " + (delay / 1000) + "s (attempt " + monitor.retry + " of " + MONITOR_RETRY_DELAYS.length + ")…", "dim");
+      teardownMonitorPort(port).then(function () {
+        if (!monitor.on || gen !== monitor.gen) return null;
+        return monitorRetryWait(delay);
+      }).then(function () {
+        if (!monitor.on || gen !== monitor.gen) return null;
+        return refindMonitorPort();
+      }).then(function (found) {
+        if (!monitor.on || gen !== monitor.gen) return;
+        if (monitor.portGone && !found) { scheduleMonitorRetry(null); return; }
+        monitorLoop();
+      });
+    }
+
+    function hideRomDiagnostic() { $("romDiag").className = "alert"; }
+    function armRomDiagnostic(gen) {
+      if (monitor.romTimer) clearTimeout(monitor.romTimer);
+      monitor.romTimer = setTimeout(function () {
+        monitor.romTimer = null;
+        if (!monitor.on || gen !== monitor.gen) return;
+        if (monitor.sawRom && !acceptance.bootOk) {
+          $("romDiag").className = "alert show";
+          monTerm.line("Diagnostic: only the ESP-ROM banner arrived and no ESP-IDF boot log followed within 6 s — see the note below the monitor.", "err");
+        }
+      }, 6000);
+    }
     var acceptance = {
       hasAny: false, bytes: 0, bootOk: false, bootAt: 0, crash: false,
       resets: 0, resetTimes: [], startedAt: 0, tail: ""
@@ -1115,6 +1241,7 @@
       }
       if (!acceptance.bootOk && /ESP-IDF v|app_init:|cpu_start:|Project name:|main_task:/.test(t)) {
         acceptance.bootOk = true; acceptance.bootAt = Date.now();
+        hideRomDiagnostic();
         $("chkBoot").className = "check pass";
         $("chkBoot").querySelector(".cd").textContent = "Boot markers seen (" + ((acceptance.bootAt - acceptance.startedAt) / 1000).toFixed(1) + "s after the monitor opened).";
       }
@@ -1137,7 +1264,11 @@
       if (!state.port || state.busy === "monitoring") return;
       if (state.busy !== "idle") { flashTerm.line("The serial port is busy (" + state.busy + "); open the monitor later.", "err"); return; }
       state.busy = "monitoring";
-      monitor.on = true; monitor.retry = 0;
+      monitor.on = true; monitor.retry = 0; monitor.portGone = false;
+      var info = state.port.getInfo ? state.port.getInfo() : {};
+      monitor.usbVid = (info.usbVendorId != null) ? info.usbVendorId : null;
+      monitor.usbPid = (info.usbProductId != null) ? info.usbProductId : null;
+      hideRomDiagnostic();
       resetAcceptance();
       setConn("busy", "Serial monitor running", "Baud rate " + $("monBaud").value + ". Use the send box to send commands to the device.");
       monTerm.line("[" + nowTime() + "] Monitor open, baud rate " + $("monBaud").value + ".", "dim");
@@ -1146,59 +1277,58 @@
     }
 
     function monitorLoop() {
+      var gen = ++monitor.gen;
       var port = state.port;
+      if (!port) { scheduleMonitorRetry(null); return; }
       var baud = parseInt($("monBaud").value, 10) || 115200;
       port.open({ baudRate: baud, bufferSize: 65536 }).then(function () {
         // Release EN / GPIO0 so opening the port does not hold the board in reset or download mode
         return port.setSignals({ dataTerminalReady: false, requestToSend: false }).catch(function () {});
       }).then(function () {
+        if (!monitor.on || gen !== monitor.gen) { teardownMonitorPort(port); return; }
+        monitor.retry = 0;
         monitor.writer = port.writable ? port.writable.getWriter() : null;
+        // Acquire the reader ONCE for this connection and loop read() on it.
+        // (Getting a fresh reader per chunk throws — the stream is locked —
+        // which used to force a full close/reopen cycle for every chunk.)
+        var reader = null;
+        try { reader = port.readable ? port.readable.getReader() : null; } catch (e) {}
+        if (!reader) { scheduleMonitorRetry(null); return; }
+        monitor.reader = reader;
+        monitor.sawRom = false;
+        armRomDiagnostic(gen);
         var decoder = new TextDecoder();
-        function readStep() {
-          if (!monitor.on) return;
-          monitor.reader = port.readable ? port.readable.getReader() : null;
-          if (!monitor.reader) { scheduleRetry(); return; }
-          monitor.reader.read().then(function (res) {
-            if (res.done) { cleanupReader(); scheduleRetry(); return; }
+        (function readStep() {
+          if (!monitor.on || gen !== monitor.gen) return;
+          reader.read().then(function (res) {
+            if (!monitor.on || gen !== monitor.gen) return;
+            if (res.done) { scheduleMonitorRetry(null); return; }
             if (res.value && res.value.length) {
               var s = decoder.decode(res.value, { stream: true });
+              if (s.indexOf("ESP-ROM") !== -1) monitor.sawRom = true;
               monTerm.write(s);
               feedAcceptance(s);
             }
             readStep();
-          }).catch(function () { cleanupReader(); scheduleRetry(); });
-        }
-        function cleanupReader() {
-          try { if (monitor.reader) monitor.reader.releaseLock(); } catch (e) {}
-          monitor.reader = null;
-        }
-        readStep();
+          }).catch(function (e) {
+            if (!monitor.on || gen !== monitor.gen) return;
+            scheduleMonitorRetry(e);
+          });
+        })();
       }).catch(function (e) {
-        if (!monitor.on) return;
-        scheduleRetry(e);
+        if (!monitor.on || gen !== monitor.gen) return;
+        scheduleMonitorRetry(e);
       });
-      function scheduleRetry(e) {
-        if (!monitor.on) return;
-        monitor.retry++;
-        if (monitor.retry > 6) {
-          monTerm.line("The port is gone and repeated reconnects failed; monitor stopped. Replug the cable and open it manually.", "err");
-          stopMonitor(true);
-          return;
-        }
-        monTerm.line("Serial interrupted; reconnecting in 800ms (attempt " + monitor.retry + ")…", "dim");
-        try { port.close().catch(function () {}); } catch (err) {}
-        setTimeout(function () { if (monitor.on) monitorLoop(); }, 800);
-      }
     }
 
     function stopMonitor(silent) {
       monitor.on = false;
+      monitor.gen++;
+      if (monitor.romTimer) { clearTimeout(monitor.romTimer); monitor.romTimer = null; }
+      if (monitor.wakeRetry) monitor.wakeRetry();
+      hideRomDiagnostic();
       var p = state.port;
-      var jobs = [];
-      if (monitor.reader) { try { jobs.push(monitor.reader.cancel().catch(function () {})); } catch (e) {} }
-      if (monitor.writer) { try { monitor.writer.releaseLock(); } catch (e) {} monitor.writer = null; }
-      if (p) jobs.push(Promise.resolve().then(function () { return p.close(); }).catch(function () {}));
-      return Promise.all(jobs).then(function () {
+      return teardownMonitorPort(p).then(function () {
         if (state.busy === "monitoring") state.busy = "idle";
         if (!silent) monTerm.line("[" + nowTime() + "] Monitor closed.", "dim");
         if (state.port) setConn("on", "Device connected", "Serial port released — you can flash or open the monitor again.");
