@@ -5,8 +5,26 @@
 - 工具链：`espressif/idf:v6.0.3`（上游 README 要求 ESP-IDF v6.0.3，其他版本不支持）
 - 上游默认钉死版本：`463bd2a05380fea4211b0099ad0f70933c108b20`（2026-11-07 的 main），可在 Run workflow 时改 `upstream_ref`
 - 默认板子：`devkit` = ESP32-C5 DevKitC-1（上游默认目标）
-- 产物：`muse-gadget.bin`（app-only，可用于 OTA）+ `bootloader.bin` + `partition-table.bin` + `flasher_args.json`，见 Actions 产物，保留 30 天
+- 产物：`muse-gadget.bin`（app-only，可用于 OTA）+ `bootloader.bin` + `partition-table.bin` + `ota_data_initial.bin` + `phy_init_data.bin` + `flasher_args.json`，见 Actions 产物，保留 30 天；每次成功编译还会把同一套文件发布到 GitHub Pages（见下节），不用登录就能下载
 - **固件里不带 SDK token**，烧好后按上游 README 用串口 / BLE 再设置 token
+
+## 最新固件（GitHub Pages，免登录下载）
+
+每次编译成功后，工作流自动把固件发布到：
+
+- 网站：https://legogogo25e.github.io/muse-gadget-build/
+- 清单：https://legogogo25e.github.io/muse-gadget-build/manifest.json
+- 某块板子的清单：https://legogogo25e.github.io/muse-gadget-build/firmware/devkit/manifest.json
+
+`manifest.json` 的结构（`boards.<board>` 里）：`board` / `target` / `project_version` / `upstream_sha` / `idf_version` / `built_at_utc` / `github_run`，以及 `flash`（`mode` / `freq` / `size`）和 `files` 数组，每项含 `name` / `url`（相对路径）/ `address`（十进制烧录地址）/ `size` / `sha256`。
+
+**烧录地址一律以 manifest / `flasher_args.json` 为准，不要硬编码 IDF 默认值。** muse-gadget 的实测地址（devkit，ESP32-C5）：bootloader `0x2000`（ESP32-C5 自身偏移，不是 0x0）、partition-table `0x10000`（不是 IDF 默认的 0x8000）、ota_data_initial `0x17000`、phy_init_data `0x19000`、app（muse-gadget.bin）`0x20000`（ota_0 槽）。flash 参数以 manifest 为准，当前是 `dio` / `80m` / `keep`（sdkconfig 里的 QIO / 8MB 没生效）。
+
+5 个文件都要烧：`ota_data_initial.bin` 会把 OTA 槽位选择重置回 ota_0，没有它，之前从 ota_1 启动过的板子会继续跑旧固件。
+
+## 网页烧录（ESP32 Web Flasher Space）
+
+有一个配套的 Space（网页烧录器）：打开后自动从上面的 Pages 地址拉最新固件和 manifest，核对 SHA-256，用 esptool-js（Web Serial）在桌面 Chrome / Edge 里把固件烧到插在电脑上的 ESP32，烧完自动重启并打开串口监视器看启动 log。Web Serial 只在桌面 Chrome / Edge 可用，Safari、iPhone、微信内置浏览器都不支持。
 
 ## 怎么跑一次
 
