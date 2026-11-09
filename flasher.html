@@ -208,6 +208,28 @@
       footer { margin-top: 22px; font-size: 13px; color: var(--muted); display: flex; flex-wrap: wrap; gap: 6px 18px; }
       footer a { color: var(--accent); text-decoration: none; }
       footer a:hover { text-decoration: underline; }
+      /* ---------- closed loop / multi-board / report ---------- */
+      .loop-card { margin-bottom: 14px; }
+      .loop-steps { display: grid; grid-template-columns: repeat(auto-fit, minmax(148px, 1fr)); gap: 10px; margin: 0; padding: 0; list-style: none; counter-reset: step; }
+      .loop-step { background: var(--panel-2); border: 1px solid var(--line); border-radius: 7px; padding: 10px 11px; }
+      .loop-step b { display: block; font-size: 13px; margin-bottom: 3px; }
+      .loop-step b::before { counter-increment: step; content: counter(step) " · "; color: var(--accent); }
+      .loop-step span { font-size: 12.5px; color: var(--muted); line-height: 1.45; display: block; }
+      .board-sum { border-top: 1px solid var(--line); margin-top: 12px; padding-top: 10px; }
+      .board-sum h3 { font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin: 0 0 8px; }
+      .board-sum-row { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: baseline; padding: 7px 0; border-top: 1px solid var(--line); font-size: 13px; }
+      .board-sum-row:first-of-type { border-top: none; }
+      .board-sum-row .bk { font-weight: 800; }
+      .board-sum-row .bt { color: var(--accent); font-weight: 700; }
+      .device-row { border: 1px solid var(--line); border-radius: 7px; padding: 11px 12px; margin-top: 10px; background: var(--panel-2); }
+      .device-row .dr-top { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: baseline; }
+      .device-row .dr-name { font-weight: 800; font-size: 14px; }
+      .device-row .dr-meta { font-size: 12.5px; color: var(--muted); overflow-wrap: anywhere; }
+      .device-row .dr-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 9px; }
+      .lamp-dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; background: var(--line); vertical-align: middle; margin-right: 4px; }
+      .lamp-dot.pass { background: var(--ok); } .lamp-dot.fail { background: var(--bad); } .lamp-dot.wait { background: var(--warn); }
+      .report-status { font-size: 13px; color: var(--muted); margin-top: 8px; overflow-wrap: anywhere; }
+      .full-input { width: 100%; margin-top: 6px; }
     </style>
   </head>
   <body>
@@ -233,6 +255,19 @@
         <span id="updateAlertText"></span>
       </div>
 
+      <section class="card loop-card" aria-label="Closed-loop workflow">
+        <h2>Closed loop · Agent development for muse-gadget</h2>
+        <ol class="loop-steps">
+          <li class="loop-step"><b>Edit code</b><span>Changes land in <span class="mono">legogogo25e/muse-gadget</span> — the independent development repo (imported from upstream, not a fork). The build workflow now points there.</span></li>
+          <li class="loop-step"><b>Actions build</b><span>GitHub Actions in <span class="mono">muse-gadget-build</span> compiles each board and publishes firmware + <span class="mono">manifest.json</span> to GitHub Pages.</span></li>
+          <li class="loop-step"><b>Page detects</b><span>This page polls the manifest every 45s, detects each board's chip via esptool-js, and matches it to the right firmware entry.</span></li>
+          <li class="loop-step"><b>Flash</b><span>Flash one board or “Flash all matched”. Every file is SHA-256 verified before writing — a mismatch aborts.</span></li>
+          <li class="loop-step"><b>Acceptance</b><span>Serial output, boot markers and crash / reboot-loop checks run per board (see lamps below).</span></li>
+          <li class="loop-step"><b>Report back</b><span>If a report endpoint is configured, results POST automatically after a 10-second observation window — or send manually. That report is what the agent reads to iterate.</span></li>
+        </ol>
+        <p class="hint">Honest limits: Web Serial requires <strong>one click per port</strong> to grant access — the browser will not let a page claim USB devices silently, so “fully automatic” starts after you add each board once on this computer. Real hardware flashing is <strong>not yet verified</strong> end-to-end (no USB device on the build side); treat the first run on each board as a supervised test. Use the GitHub Pages top-level copy of this page for real flashing — the muse.ai embedded preview cannot pass the serial permission through.</p>
+      </section>
+
       <div class="grid">
         <div class="col">
 
@@ -249,6 +284,11 @@
               <div><dt>Build record</dt><dd id="mRun">—</dd></div>
             </div>
             <div id="fileList"></div>
+            <div class="board-sum" id="boardSummaryWrap">
+              <h3>Boards in this manifest · build status</h3>
+              <div id="boardSummary"><span style="color:var(--muted);font-size:13px;">Waiting for manifest…</span></div>
+              <p class="hint" style="margin-top:8px;">Development target: <a href="https://github.com/legogogo25e/muse-gadget" target="_blank" rel="noopener">legogogo25e/muse-gadget</a>. Currently published firmware is the <strong>devkit / ESP32-C5</strong> build. An ESP32-S3 board will show “No match” here until an S3 board (e.g. <span class="mono">espressif-s3-devkitc-1</span>) is built in the workflow — do not flash C5 firmware onto an S3 board.</p>
+            </div>
             <p class="hint">Addresses, sizes and SHA-256 hashes all come from each build's own <span class="mono">flasher_args.json</span>, published via <a href="https://legogogo25e.github.io/muse-gadget-build/manifest.json" target="_blank" rel="noopener">manifest.json</a>. Every file is SHA-256 verified after download — a mismatch aborts the flash.</p>
           </section>
 
@@ -279,12 +319,39 @@
             <p class="hint">Auto-flash only triggers while a device is connected and the serial port is not busy flashing or monitoring; if the monitor is open it is stopped first. Rollback uses the previous firmware bytes kept in this page's memory — it does not need the network and only works while this page stays open.</p>
           </section>
 
+          <section class="card" aria-label="Multi-board manager">
+            <h2>Multi-board · All USB ESP32 boards</h2>
+            <p class="hint" style="margin-top:0;">Add every board plugged into this computer. Each board gets its own port entry: chip detection runs through esptool-js (<span class="mono">loader.main()</span>), the detected chip is matched against the manifest targets above, and you can flash boards individually or all matched boards in one pass. The single-device controls above stay as the primary flow for the first board.</p>
+            <div class="btn-row">
+              <button id="btnAddDevice">Add device</button>
+              <button class="primary" id="btnFlashAll" disabled>Flash all matched</button>
+              <button id="btnDetectAll" disabled>Detect all chips</button>
+            </div>
+            <div id="deviceList"><p class="hint" id="multiEmpty">No boards added yet. Click “Add device” once per board — the browser asks you to pick that board's serial port. That one click per port is a Web Serial requirement and cannot be skipped.</p></div>
+            <p class="hint">Flash-all runs boards one after another (not truly parallel writes) so USB and power stay stable; status and acceptance lamps are tracked per board. A board whose chip has no entry in the manifest is never flashed.</p>
+          </section>
+
           <section class="card" aria-label="Post-flash checks">
             <h2>Post-flash checks <span class="right"><button class="small" id="btnCopyReport" disabled>Copy check report</button></span></h2>
             <div class="check" id="chkOut"><span class="lamp"></span><div><div class="ct">Serial output received</div><div class="cd">Any data from the device after the monitor opens.</div></div></div>
             <div class="check" id="chkBoot"><span class="lamp"></span><div><div class="ct">Booted successfully</div><div class="cd">The boot log shows ESP-IDF / app_init markers and is not immediately followed by a reset.</div></div></div>
             <div class="check" id="chkCrash"><span class="lamp"></span><div><div class="ct">No crash / no reboot loop</div><div class="cd">No Guru Meditation, panic or abort seen; an abnormally high reset count is flagged as a reboot loop.</div></div></div>
             <p class="hint">The checks read the live log from the serial monitor on the right. Results stay in this browser; use "Copy check report" to send them together with the log.</p>
+          </section>
+
+          <section class="card" aria-label="Auto-report results">
+            <h2>Auto-report · Send results back</h2>
+            <p class="hint" style="margin-top:0;">Point this at a small Worker endpoint that creates a GitHub Issue in <span class="mono">muse-gadget</span> / <span class="mono">muse-gadget-build</span> (that Worker is a separate step — it is not deployed yet). The page POSTs a JSON report: board, detected chip, firmware version / build time, the three acceptance results, per-board multi-board results, and the serial log tail. Nothing is sent anywhere until you paste an endpoint here.</p>
+            <label for="reportEndpoint" style="font-size:13px;font-weight:700;color:var(--muted);">Report endpoint URL (Worker)</label>
+            <input type="text" id="reportEndpoint" class="full-input mono" placeholder="https://your-worker.example.workers.dev/report" autocomplete="off" spellcheck="false" />
+            <div class="toggle-row">
+              <button class="toggle" id="tgAutoReport" aria-pressed="false"><span class="sw"></span>Auto-report after flashing</button>
+            </div>
+            <p class="hint">When auto-report is on and an endpoint is set, the report is sent automatically <strong>10 seconds after flashing finishes</strong> (the observation window lets the boot / crash checks settle). Endpoint and toggle live in memory only — reload the page and you need to paste it again.</p>
+            <div class="btn-row" style="margin-top:10px;">
+              <button id="btnSendReport">Send report now</button>
+            </div>
+            <div class="report-status mono" id="reportStatus">No report sent yet. With no endpoint configured, “Copy check report” above remains the way to hand results back.</div>
           </section>
 
           <section class="card" aria-label="Local firmware">
@@ -396,7 +463,13 @@
       autoFlash: false,
       autoMon: true,
       lastAutoFlashedKey: null,
-      checkTimer: null
+      checkTimer: null,
+      devices: [],
+      deviceSeq: 1,
+      reportEndpoint: "",
+      autoReport: false,
+      reportTimer: null,
+      lastReportAt: null
     };
 
     /* ---------------- terminals ---------------- */
@@ -638,7 +711,35 @@
       $("fetchNote").textContent = "Manifest loaded at " + new Date().toLocaleString("en-GB", { hour12: false }) + " — " + b.files.length + " files, " +
         fmtBytes(b.files.reduce(function (a, f) { return a + f.size; }, 0)) + " in total.";
       state.firmwareBufs = null;
+      renderBoardSummary();
+      // Re-match any already-added multi-board devices against the fresh manifest
+      state.devices.forEach(function (d) { d.matchedKey = matchBoardForChip(d.chip); });
+      renderDevices();
       syncButtons();
+    }
+    function renderBoardSummary() {
+      var wrap = $("boardSummary");
+      if (!wrap || !state.manifest || !state.manifest.boards) return;
+      wrap.innerHTML = "";
+      Object.keys(state.manifest.boards).forEach(function (k) {
+        var bb = state.manifest.boards[k];
+        var row = document.createElement("div");
+        row.className = "board-sum-row";
+        row.innerHTML = '<span class="bk mono">' + esc(k) + '</span><span class="bt mono">' + esc(bb.target || "—") + '</span>' +
+          '<span>v' + esc(bb.project_version || "?") + '</span><span style="color:var(--muted)">' + esc(bb.built_at_utc || "") + '</span>' +
+          '<span style="color:var(--muted)">' + (bb.files ? bb.files.length : 0) + ' files</span>';
+        wrap.appendChild(row);
+      });
+    }
+    function normChip(s) { return String(s || "").toLowerCase().replace(/[^a-z0-9]/g, ""); }
+    function matchBoardForChip(chip) {
+      if (!chip || !state.manifest || !state.manifest.boards) return null;
+      var c = normChip(chip);
+      var keys = Object.keys(state.manifest.boards);
+      for (var i = 0; i < keys.length; i++) {
+        if (normChip(state.manifest.boards[keys[i]].target) === c) return keys[i];
+      }
+      return null;
     }
 
     function loadManifest(isAutoCheck) {
@@ -856,6 +957,7 @@
             state.flashedBuiltAt = state.pendingFlash.builtAt;
           }
           setConn("on", "Flashing complete", "Firmware written and verified." + (state.autoMon ? " Opening the serial monitor to watch the boot log…" : " You can open the serial monitor to watch the boot log."));
+          scheduleAutoReport();
           if (state.autoMon) setTimeout(function () { startMonitor(); }, 600);
         } else {
           setConn("err", "Flashing did not complete", "See the error in the flash log. Common causes: baud rate too high, unstable cable/port, or the device is not in download mode.");
@@ -1154,9 +1256,246 @@
       copyText(lines.join("\n"), this);
     };
 
+    /* ---------------- multi-board manager ---------------- */
+    function downloadForBoard(board) {
+      var results = [];
+      var chain = Promise.resolve();
+      board.files.forEach(function (f) {
+        chain = chain.then(function () {
+          return fetch(PAGES_BASE + f.url, { cache: "no-store" }).then(function (r) {
+            if (!r.ok) throw new Error(f.name + " HTTP " + r.status);
+            return r.arrayBuffer();
+          }).then(function (buf) {
+            if (buf.byteLength !== f.size) throw new Error(f.name + " size mismatch");
+            return sha256Hex(buf).then(function (hex) {
+              if (hex !== f.sha256) throw new Error(f.name + " SHA-256 mismatch — aborted");
+              results.push({ file: f, buf: buf });
+            });
+          });
+        });
+      });
+      return chain.then(function () { return results; });
+    }
+    function flashPortGeneric(port, board, downloaded, tag) {
+      return loadEspLib().then(function (lib) {
+        var transport = new lib.Transport(port, false);
+        var baud = parseInt($("baudSel").value, 10) || 921600;
+        var loader = new lib.ESPLoader({ transport: transport, baudrate: baud, terminal: espTerminal, enableTracing: false });
+        flashTerm.line(tag + " Connecting to chip (baud " + baud + ")…", "acc");
+        return loader.main().then(function (chip) {
+          flashTerm.line(tag + " Chip: " + chip, "ok");
+          var fileArray = downloaded.map(function (d) { return { data: bufToBinaryString(d.buf), address: d.file.address }; });
+          return loader.writeFlash({
+            fileArray: fileArray,
+            flashSize: board && board.flash && board.flash.size ? board.flash.size : "keep",
+            flashMode: board && board.flash && board.flash.mode ? board.flash.mode : "keep",
+            flashFreq: board && board.flash && board.flash.freq ? board.flash.freq : "keep",
+            eraseAll: false, compress: true,
+            reportProgress: function (fi, w, t) { if (t) flashTerm.line(tag + " Writing file " + (fi + 1) + ": " + Math.round(w / t * 100) + "%", "dim"); }
+          }).then(function () { return chip; });
+        }).then(function (chip) {
+          return loader.hardReset().catch(function () {}).then(function () { return transport.disconnect().catch(function () {}); }).then(function () { return chip; });
+        }).catch(function (e) {
+          return transport.disconnect().catch(function () {}).then(function () { throw e; });
+        });
+      });
+    }
+    function detectChipForDevice(dev) {
+      if (dev.busy) return Promise.resolve(null);
+      dev.busy = true; dev.status = "Detecting chip…"; renderDevices();
+      return loadEspLib().then(function (lib) {
+        var transport = new lib.Transport(dev.port, false);
+        var loader = new lib.ESPLoader({ transport: transport, baudrate: parseInt($("baudSel").value, 10) || 921600, terminal: espTerminal, enableTracing: false });
+        return loader.main().then(function (chip) {
+          return transport.disconnect().catch(function () {}).then(function () { return chip; });
+        }).catch(function (e) {
+          return transport.disconnect().catch(function () {}).then(function () { throw e; });
+        });
+      }).then(function (chip) {
+        dev.chip = String(chip);
+        dev.matchedKey = matchBoardForChip(dev.chip);
+        dev.status = dev.matchedKey ? ("Matched → " + dev.matchedKey) : "No match in manifest for this chip";
+        flashTerm.line("[Board #" + dev.id + "] Detected chip: " + dev.chip + " — " + dev.status, dev.matchedKey ? "ok" : "err");
+        dev.busy = false; renderDevices(); return dev.chip;
+      }).catch(function (e) {
+        dev.status = "Detection failed: " + (e && e.message ? e.message : e);
+        flashTerm.line("[Board #" + dev.id + "] Chip detection failed: " + dev.status, "err");
+        dev.busy = false; renderDevices(); return null;
+      });
+    }
+    function quickCheckDevice(dev) {
+      // 6-second boot observation on this board's own port
+      dev.accept = { output: false, boot: false, crash: false, checked: false, logTail: "" };
+      var port = dev.port;
+      return port.open({ baudRate: 115200, bufferSize: 65536 }).then(function () {
+        return port.setSignals({ dataTerminalReady: false, requestToSend: false }).catch(function () {});
+      }).then(function () {
+        var reader = port.readable ? port.readable.getReader() : null;
+        if (!reader) throw new Error("no readable stream");
+        var dec = new TextDecoder(); var buf = ""; var deadline = Date.now() + 6000;
+        function step() {
+          if (Date.now() > deadline) return Promise.resolve();
+          return Promise.race([reader.read(), sleep(700).then(function () { return { timeout: true }; })]).then(function (res) {
+            if (res && res.timeout) return step();
+            if (res.done) return null;
+            if (res.value && res.value.length) buf += dec.decode(res.value, { stream: true });
+            return step();
+          });
+        }
+        return step().then(function () {
+          try { reader.cancel().catch(function () {}); } catch (e) {}
+          try { reader.releaseLock(); } catch (e) {}
+          return buf;
+        });
+      }).then(function (text) {
+        dev.accept.output = text.length > 0;
+        dev.accept.boot = /ESP-IDF v|app_init:|cpu_start:|Project name:|main_task:/.test(text);
+        dev.accept.crash = /Guru Meditation|panic'ed|abort\(\) was called|Backtrace:/.test(text) || ((text.match(/rst:0x[0-9a-fA-F]+/g) || []).length >= 4);
+        dev.accept.checked = true; dev.accept.logTail = text.slice(-4000);
+        return port.close().catch(function () {});
+      }).catch(function (e) {
+        dev.accept.checked = true;
+        return port.close().catch(function () {});
+      });
+    }
+    function flashOneDevice(dev) {
+      if (!dev.matchedKey || dev.busy) return Promise.resolve(false);
+      var board = state.manifest.boards[dev.matchedKey];
+      dev.busy = true; dev.status = "Downloading + verifying SHA-256…"; renderDevices();
+      return downloadForBoard(board).then(function (dl) {
+        dev.status = "Flashing…"; renderDevices();
+        return flashPortGeneric(dev.port, board, dl, "[Board #" + dev.id + "]");
+      }).then(function () {
+        dev.status = "Flash OK — checking boot (6s)…"; dev.flashOk = true; renderDevices();
+        return quickCheckDevice(dev);
+      }).then(function () {
+        dev.status = dev.accept.boot && !dev.accept.crash ? "Done — boot OK" : "Flashed — check acceptance lamps";
+        dev.busy = false; renderDevices();
+        flashTerm.line("[Board #" + dev.id + "] " + dev.status, dev.accept.boot && !dev.accept.crash ? "ok" : "acc");
+        return true;
+      }).catch(function (e) {
+        dev.status = "Flash failed: " + (e && e.message ? e.message : e); dev.flashOk = false; dev.busy = false; renderDevices();
+        flashTerm.line("[Board #" + dev.id + "] " + dev.status, "err");
+        return false;
+      });
+    }
+    function renderDevices() {
+      var list = $("deviceList");
+      var addBtn = $("btnAddDevice"); if (addBtn) addBtn.disabled = !serialOK;
+      var anyMatched = state.devices.some(function (d) { return d.matchedKey && !d.busy; });
+      $("btnFlashAll").disabled = !anyMatched;
+      $("btnDetectAll").disabled = !state.devices.length || state.devices.some(function (d) { return d.busy; });
+      if (!state.devices.length) {
+        list.innerHTML = '<p class="hint" id="multiEmpty">No boards added yet. Click “Add device” once per board — the browser asks you to pick that board\'s serial port. That one click per port is a Web Serial requirement and cannot be skipped.</p>';
+        return;
+      }
+      list.innerHTML = "";
+      state.devices.forEach(function (dev, idx) {
+        var info = dev.port.getInfo ? dev.port.getInfo() : {};
+        var vidpid = info.usbVendorId ? ("VID 0x" + info.usbVendorId.toString(16).toUpperCase() + (info.usbProductId ? " / PID 0x" + info.usbProductId.toString(16).toUpperCase() : "")) : "USB serial";
+        var row = document.createElement("div"); row.className = "device-row";
+        var acc = dev.accept || { output: false, boot: false, crash: false, checked: false };
+        function lamp(v, bad) { return '<span class="lamp-dot ' + (bad ? "fail" : v ? "pass" : acc.checked ? "wait" : "") + '"></span>'; }
+        row.innerHTML =
+          '<div class="dr-top"><span class="dr-name">Board #' + dev.id + '</span><span class="dr-meta mono">' + esc(vidpid) + '</span></div>' +
+          '<div class="dr-meta" style="margin-top:4px;">Chip: <b>' + esc(dev.chip || "not detected yet") + '</b> · Matched board: <b>' + esc(dev.matchedKey || "—") + '</b></div>' +
+          '<div class="dr-meta">Status: ' + esc(dev.status || "Connected") + '</div>' +
+          '<div class="dr-meta" style="margin-top:5px;">' + lamp(acc.output) + 'Serial output &nbsp;' + lamp(acc.boot) + 'Booted &nbsp;' + lamp(!acc.crash && acc.checked, acc.crash) + (acc.crash ? 'Crash detected' : 'No crash') + '</div>';
+        var actions = document.createElement("div"); actions.className = "dr-actions";
+        var bDetect = document.createElement("button"); bDetect.className = "small"; bDetect.textContent = "Detect chip"; bDetect.disabled = dev.busy || !serialOK;
+        bDetect.onclick = function () { detectChipForDevice(dev); };
+        var bFlash = document.createElement("button"); bFlash.className = "small"; bFlash.textContent = "Flash this board"; bFlash.disabled = dev.busy || !dev.matchedKey;
+        bFlash.onclick = function () { flashOneDevice(dev).then(function (ok) { if (ok) scheduleAutoReport(); }); };
+        var bRemove = document.createElement("button"); bRemove.className = "small danger"; bRemove.textContent = "Remove"; bRemove.disabled = dev.busy;
+        bRemove.onclick = function () { state.devices.splice(idx, 1); renderDevices(); };
+        actions.appendChild(bDetect); actions.appendChild(bFlash); actions.appendChild(bRemove);
+        row.appendChild(actions);
+        list.appendChild(row);
+      });
+    }
+    $("btnAddDevice").onclick = function () {
+      if (!serialOK) { flashTerm.line("Cannot add a device: Web Serial is unavailable here (see the diagnostics banner at the top).", "err"); return; }
+      navigator.serial.requestPort().then(function (p) {
+        var info = p.getInfo ? p.getInfo() : {};
+        var dup = state.devices.some(function (d) { return d.port === p; }) || (state.port === p);
+        var dev = { id: state.deviceSeq++, port: p, chip: null, matchedKey: null, status: "Connected — detecting chip…", busy: false, flashOk: null, accept: { output: false, boot: false, crash: false, checked: false, logTail: "" } };
+        state.devices.push(dev); renderDevices();
+        flashTerm.line("[Board #" + dev.id + "] Added (" + (info.usbVendorId ? "VID 0x" + info.usbVendorId.toString(16).toUpperCase() : "USB serial") + "). Detecting chip…");
+        detectChipForDevice(dev);
+      }).catch(function (e) { if (e && e.name !== "NotFoundError") flashTerm.line("Add device failed: " + e.message, "err"); });
+    };
+    $("btnDetectAll").onclick = function () {
+      var chain = Promise.resolve();
+      state.devices.forEach(function (d) { chain = chain.then(function () { return detectChipForDevice(d); }); });
+    };
+    $("btnFlashAll").onclick = function () {
+      var targets = state.devices.filter(function (d) { return d.matchedKey; });
+      if (!targets.length) return;
+      flashTerm.line("Flash-all: " + targets.length + " matched board(s), running one after another…", "acc");
+      var chain = Promise.resolve();
+      targets.forEach(function (d) { chain = chain.then(function () { return flashOneDevice(d); }); });
+      chain.then(function () { flashTerm.line("Flash-all finished. See per-board lamps in the Multi-board section.", "ok"); scheduleAutoReport(); });
+    };
+
+    /* ---------------- auto-report ---------------- */
+    bindToggle("tgAutoReport", "autoReport", null);
+    $("reportEndpoint").addEventListener("change", function () { state.reportEndpoint = this.value.trim(); });
+    $("reportEndpoint").addEventListener("input", function () { state.reportEndpoint = this.value.trim(); });
+    function buildReportData() {
+      return {
+        type: "esp32-flasher-report",
+        reported_at: new Date().toISOString(),
+        page_board_selected: state.boardKey,
+        firmware: state.board ? { board: state.boardKey, target: state.board.target, version: state.board.project_version, idf_version: state.board.idf_version, built_at_utc: state.board.built_at_utc } : null,
+        single_device_acceptance: {
+          serial_output: acceptance.hasAny ? "pass" : "not-observed",
+          bytes_received: acceptance.bytes,
+          booted: acceptance.bootOk ? "pass" : "not-observed",
+          crash_or_reboot_loop: acceptance.crash ? "fail" : "none-observed-so-far"
+        },
+        devices: state.devices.map(function (d) {
+          return { id: d.id, chip: d.chip, matched_board: d.matchedKey, status: d.status, flash_ok: d.flashOk,
+            acceptance: d.accept ? { serial_output: d.accept.output, booted: d.accept.boot, crash: d.accept.crash, checked: d.accept.checked } : null,
+            log_tail: d.accept ? (d.accept.logTail || "") : "" };
+        }),
+        serial_log_tail: monTerm.getText().slice(-12000),
+        flash_log_tail: flashTerm.getText().slice(-6000)
+      };
+    }
+    function sendReport(isManual) {
+      var url = (state.reportEndpoint || "").trim();
+      var statusEl = $("reportStatus");
+      if (!url) {
+        var msg = "No report endpoint configured — nothing sent. Paste a Worker endpoint URL above, or use “Copy check report”.";
+        statusEl.textContent = msg;
+        if (isManual) flashTerm.line(msg, "err");
+        return Promise.resolve(false);
+      }
+      statusEl.textContent = "Sending report to " + url + " …";
+      return fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(buildReportData()) }).then(function (r) {
+        if (!r.ok) throw new Error("HTTP " + r.status);
+        state.lastReportAt = new Date().toISOString();
+        statusEl.textContent = "Report sent ✓ at " + new Date().toLocaleString("en-GB", { hour12: false }) + " → " + url + ". The agent can now read it from the GitHub Issue the Worker creates.";
+        flashTerm.line("Acceptance report sent to the configured endpoint.", "ok");
+        return true;
+      }).catch(function (e) {
+        statusEl.textContent = "Report failed (" + e.message + ") → " + url + ". The report is still available via “Copy check report”.";
+        flashTerm.line("Report send failed: " + e.message, "err");
+        return false;
+      });
+    }
+    function scheduleAutoReport() {
+      if (!state.autoReport || !state.reportEndpoint) return;
+      if (state.reportTimer) clearTimeout(state.reportTimer);
+      flashTerm.line("Auto-report on: sending the report in 10 seconds (observation window)…", "dim");
+      state.reportTimer = setTimeout(function () { sendReport(false); }, 10000);
+    }
+    $("btnSendReport").onclick = function () { sendReport(true); };
+
     /* ---------------- boot ---------------- */
     loadManifest(false);
     setupAutoCheck();
+    renderDevices();
     syncButtons();
     </script>
   </body>
