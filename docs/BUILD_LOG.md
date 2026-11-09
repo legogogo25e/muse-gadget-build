@@ -41,6 +41,39 @@
   - `build-info.txt` — 399 字节，`idf_version=ESP-IDF v6.0.3` ✅（修复已验证）
 - 注意：两次运行同源码同版本，`.bin` 大小同为 1,708,032 字节，但 SHA-256 不同（第 1 次 `79590cac…`，第 2 次 `8e1ed8d1…`），固件内嵌了构建时间戳，属正常现象，不能用 SHA 是否相同判断两次构建是否一致。
 
+## 第 3 次运行（2026-11-09 10:51–10:54 HKT，成功 ✅，首次发布到 GitHub Pages）
+
+- 日期（HKT）：2026-11-09
+- 工作流：Build ESP32 firmware（`.github/workflows/build-esp32.yml`，commit `43c3d8b`：新增 `publish-pages` 作业；仓库 Pages 来源事先改为 GitHub Actions）
+- 运行链接：https://github.com/legogogo25e/muse-gadget-build/actions/runs/42553177048
+- 板子：`devkit`
+- 上游：`facebookincubator/muse-gadget-sdk @ 463bd2a05380fea4211b0099ad0f70933c108b20`
+- ESP-IDF：`espressif/idf:v6.0.3`
+- 版本：`PROJECT_VER=1.0.0`
+- 结果：成功；`Build devkit` + `Publish firmware to GitHub Pages` 两个作业都通过
+- 耗时：3 分 30 秒（10:51:10–10:54:40 HKT）
+- Pages：https://legogogo25e.github.io/muse-gadget-build/manifest.json 已上线并核对：`idf_version=ESP-IDF v6.0.3`，`flash: dio / 80m / keep`，3 个文件（bootloader `0x2000`、partition-table `0x10000`、muse-gadget.bin `0x20000`）；`muse-gadget.bin` 1,708,032 字节，SHA-256 `acdcdfbb50784da23e599d509e674367431172781479305f0b150f502d7734e7`（与 Pages 下载实测一致）
+- 更正：第 3 次运行的 `flasher_args.json` 证明 bootloader 地址是 `0x2000`（ESP32-C5 自身偏移），flash 参数是 `dio / keep`，不是之前按 sdkconfig 猜的 0x0 / QIO / 8MB；manifest 以 `flasher_args.json` 为准。另发现产物漏了 `ota_data_initial.bin` 和 `phy_init_data.bin`，见第 4 次运行。
+
+## 第 4 次运行（2026-11-09 11:01–11:06 HKT，成功 ✅，补齐 5 个文件）
+
+- 日期（HKT）：2026-11-09
+- 工作流：Build ESP32 firmware（`.github/workflows/build-esp32.yml`，commit `7bf7ddb`：artifact 和 Pages 都加上 `ota_data_initial.bin` + `phy_init_data.bin`）
+- 运行链接：https://github.com/legogogo25e/muse-gadget-build/actions/runs/42554090826
+- 板子：`devkit`
+- 上游：`facebookincubator/muse-gadget-sdk @ 463bd2a05380fea4211b0099ad0f70933c108b20`
+- ESP-IDF：`espressif/idf:v6.0.3`
+- 版本：`PROJECT_VER=1.0.0`
+- 结果：成功；`Build devkit`（3 分 41 秒）+ `Publish firmware to GitHub Pages`（40 秒）都通过
+- 耗时：4 分 27 秒（11:01:42–11:06:09 HKT）
+- Pages：manifest 已核对，5 个文件齐全：
+  - `bootloader.bin` — 0x2000，23,632 字节，SHA-256 `5db4bed99dd23def9b457f6e99bfaf0d6508fdfbddf4ce75628b9a3f320a38d9`
+  - `partition-table.bin` — 0x10000，3,072 字节，SHA-256 `bb6de32cd892ff0e9930d513e561858b46081c48d1e571bdb3b6077851a1e385`
+  - `ota_data_initial.bin` — 0x17000，8,192 字节，SHA-256 `7d2c7ac4888bfd75cd5f56e8d61f69595121183afc81556c876732fd3782c62f`
+  - `phy_init_data.bin` — 0x19000，272 字节，SHA-256 `d2dbf30035dcbe1f7283a25a4f8d27f145e0b0266b407e2e68a298efc6a58042`
+  - `muse-gadget.bin` — 0x20000，1,708,032 字节，SHA-256 `1edce269420bb40369d57a797632123d99b84408f98b05cf6b4f043c006d4c5e`
+- 说明：`ota_data_initial.bin` 会把 OTA 槽位选择重置回 ota_0，没有它，之前从 ota_1 启动过的板子会继续跑旧固件。
+
 ## 以后每次运行怎么记
 
 复制上面一段，填：日期、运行链接、板子、上游 commit、版本、结果、耗时、产物名、`.bin` 大小和 SHA-256。只改版本号不改上游时，OTA 会因版本门跳过安装，记得涨 `project_version`。
