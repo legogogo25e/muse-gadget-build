@@ -2,6 +2,8 @@
 
 用 GitHub Actions 编译 [facebookincubator/muse-gadget-sdk](https://github.com/facebookincubator/muse-gadget-sdk) 的 ESP32 固件，不用在本地装 ESP-IDF。
 
+> 想把这套做法用到别的项目上？看 [docs/EXAMPLE-FLOW.md](docs/EXAMPLE-FLOW.md)：源码仓 + 编译发布仓的双仓流程说明（附新项目检查清单）。
+
 - 工具链：`espressif/idf:v6.0.3`（上游 README 要求 ESP-IDF v6.0.3，其他版本不支持）
 - 上游默认钉死版本：`463bd2a05380fea4211b0099ad0f70933c108b20`（2026-11-07 的 main），可在 Run workflow 时改 `upstream_ref`
 - 默认板子：`devkit` = ESP32-C5 DevKitC-1（上游默认目标）
