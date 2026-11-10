@@ -317,11 +317,9 @@ jobs:
           <b>{info.get("project_version")}</b>, built
           {info.get("built_at_utc")} UTC.
           <a href="manifest.json">manifest.json</a> |
-          <a href="firmware/{board}
-          
-          json">board manifest</a></p>
+          <a href="firmware/{board}/manifest.json">board manifest</a></p>
           <ul>
-          {"".join(f'<li><a href="firmware/{board}/{f["name"]}">{f["name"]}</a> — 0x{f["address"]:x}, {f["size"]} bytes</li>' for f in files)}
+          {"".join(f'<li><a href="firmware/{board}/{f["name"]}">{f["name"]}</a> — 0x{f["address"]:x}, {f["size"]} bytes</li>' for f in files)}/manifest.
           </ul>
           <p>Flash it from the browser with the <a href="flasher.html">ESP32 web flasher</a>
           (Web Serial, desktop Chrome/Edge), or download the files and use
