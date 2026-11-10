@@ -279,7 +279,7 @@
               <div><dt>Target chip</dt><dd class="mono" id="mTarget">—</dd></div>
               <div><dt>Firmware version</dt><dd class="mono" id="mVersion">—</dd></div>
               <div><dt>ESP-IDF</dt><dd class="mono" id="mIdf">—</dd></div>
-              <div><dt>Built at (UTC)</dt><dd class="mono" id="mBuilt">—</dd></div>
+              <div><dt>Built at (HKT)</dt><dd class="mono" id="mBuilt">—</dd></div>
               <div><dt>Flash settings</dt><dd class="mono" id="mFlash">—</dd></div>
               <div><dt>Build record</dt><dd id="mRun">—</dd></div>
             </div>
@@ -707,11 +707,11 @@
       $("mTarget").textContent = b.target || "—";
       $("mVersion").textContent = b.project_version || "—";
       $("mIdf").textContent = b.idf_version || "—";
-      $("mBuilt").textContent = b.built_at_utc || "—";
+      $("mBuilt").textContent = (b.built_at_hkt || b.built_at_utc) || "—";
       $("mFlash").textContent = b.flash ? (b.flash.mode + " / " + b.flash.freq + " / size " + b.flash.size) : "—";
       $("mRun").innerHTML = b.github_run ? '<a href="' + esc(b.github_run) + '" target="_blank" rel="noopener">GitHub Actions run</a>' : "—";
       var fb = $("fwBadge");
-      fb.textContent = "Firmware v" + (b.project_version || "?") + " · " + (b.built_at_utc || "");
+      fb.textContent = "Firmware v" + (b.project_version || "?") + " · " + ((b.built_at_hkt || b.built_at_utc) || "");
       fb.className = "badge ok";
       var list = $("fileList");
       list.innerHTML = "";
@@ -745,7 +745,7 @@
         var row = document.createElement("div");
         row.className = "board-sum-row";
         row.innerHTML = '<span class="bk mono">' + esc(k) + '</span><span class="bt mono">' + esc(bb.target || "—") + '</span>' +
-          '<span>v' + esc(bb.project_version || "?") + '</span><span style="color:var(--muted)">' + esc(bb.built_at_utc || "") + '</span>' +
+          '<span>v' + esc(bb.project_version || "?") + '</span><span style="color:var(--muted)">' + esc((bb.built_at_hkt || bb.built_at_utc) || "") + '</span>' +
           '<span style="color:var(--muted)">' + (bb.files ? bb.files.length : 0) + ' files</span>';
         wrap.appendChild(row);
       });
@@ -884,7 +884,7 @@
     }
     function downloadFirmware() {
       var b = state.board;
-      flashTerm.line("Downloading firmware (build " + b.built_at_utc + ") and verifying SHA-256 for each file…");
+      flashTerm.line("Downloading firmware (build " + (b.built_at_hkt || b.built_at_utc) + ") and verifying SHA-256 for each file…");
       var results = [];
       var chain = Promise.resolve();
       b.files.forEach(function (f, i) {
@@ -963,7 +963,7 @@
 
       return prep.then(function (downloaded) {
         state.pendingFlash = {
-          label: useLocal ? "Local firmware" : ("v" + state.board.project_version + " · " + state.board.built_at_utc),
+          label: useLocal ? "Local firmware" : ("v" + state.board.project_version + " · " + (state.board.built_at_hkt || state.board.built_at_utc)),
           builtAt: useLocal ? null : state.board.built_at_utc,
           files: downloaded.map(function (d) { return { name: d.file.name, address: d.file.address, buf: d.buf }; })
         };
@@ -1376,7 +1376,7 @@
       var lines = [];
       lines.push("ESP32 post-flash check report");
       lines.push("Time: " + new Date().toLocaleString("en-GB", { hour12: false }));
-      lines.push("Firmware: " + (state.flashedBuiltAt ? ("build " + state.flashedBuiltAt) : (state.board ? ("manifest build " + state.board.built_at_utc) : "local firmware")));
+      lines.push("Firmware: " + (state.flashedBuiltAt ? ("build " + state.flashedBuiltAt) : (state.board ? ("manifest build " + (state.board.built_at_hkt || state.board.built_at_utc)) : "local firmware")));
       lines.push("Serial output: " + (acceptance.hasAny ? "PASS (" + acceptance.bytes + " bytes)" : "NOT OBSERVED"));
       lines.push("Booted successfully: " + (acceptance.bootOk ? "PASS" : "boot markers not observed"));
       lines.push("No crash / no reboot loop: " + (acceptance.crash ? "FAIL (crash signatures detected)" : "no anomaly found so far"));
@@ -1576,7 +1576,7 @@
         type: "esp32-flasher-report",
         reported_at: new Date().toISOString(),
         page_board_selected: state.boardKey,
-        firmware: state.board ? { board: state.boardKey, target: state.board.target, version: state.board.project_version, idf_version: state.board.idf_version, built_at_utc: state.board.built_at_utc } : null,
+        firmware: state.board ? { board: state.boardKey, target: state.board.target, version: state.board.project_version, idf_version: state.board.idf_version, built: (state.board.built_at_hkt || state.board.built_at_utc), built_at_utc: state.board.built_at_utc } : null,
         single_device_acceptance: {
           serial_output: acceptance.hasAny ? "pass" : "not-observed",
           bytes_received: acceptance.bytes,
