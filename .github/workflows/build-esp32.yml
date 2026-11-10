@@ -153,10 +153,12 @@ jobs:
             echo "project_version=$PROJECT_VER"
             echo "idf_version=$(idf.py --version 2>/dev/null || echo unknown)"
             echo "built_at_utc=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            echo "built_at_hkt=$(TZ=Asia/Hong_Kong date +%Y-%m-%dT%H:%M:%S+08:00)"
             echo "github_run=$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
           } > build-info.txt
           ls -lh "build-$BOARD/muse-gadget.bin" "build-$BOARD/bootloader/bootloader.bin" "build-$BOARD/partition_table/partition-table.bin" "build-$BOARD/flasher_args.json"
           sha256sum "build-$BOARD/muse-gadget.bin" | tee -a build-info.txt
+          
           cat build-info.txt
 
       - name: Upload firmware artifact
@@ -290,20 +292,24 @@ jobs:
               "upstream_sha": info.get("upstream_sha"),
               "idf_version": info.get("idf_version"),
               "built_at_utc": info.get("built_at_utc"),
+              "built_at_hkt": info.get("built_at_hkt"),
               "github_run": info.get("github_run"),
               "flash": flash,
               "files": files,
           }
+          
           (outdir / "manifest.json").write_text(
               json.dumps(board_manifest, indent=2) + "\n")
 
           root_manifest = {
               "repo": "legogogo25e/muse-gadget-build",
               "updated_at_utc": info.get("built_at_utc"),
+              "updated_at_hkt": info.get("built_at_hkt"),
               "boards": {board: board_manifest},
           }
           pathlib.Path("pages/manifest.json").write_text(
               json.dumps(root_manifest, indent=2) + "\n")
+              
 
           index = f"""<!doctype html><html lang="en"><head><meta charset="utf-8">
           <title>muse-gadget-build firmware</title></head><body>
