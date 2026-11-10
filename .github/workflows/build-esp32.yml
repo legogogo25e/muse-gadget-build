@@ -82,6 +82,7 @@ jobs:
           ref: ${{ env.UPSTREAM_REF }}
           path: upstream
           persist-credentials: false
+          token: ${{ secrets.UPSTREAM_REPO_TOKEN }}
 
       - name: Map board to target and sdkconfig defaults
         id: board
