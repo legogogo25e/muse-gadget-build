@@ -7,8 +7,8 @@
 - **板子**：YD-ESP32-S3-Classic，ESP32-S3，`yd-esp32-s3-classic`
   - MAC `f0:f5:bd:4b:3e:c4`，BLE 名 `MuseGadget-4B3EC4`，node_id `homelink-4b3ec4`
   - 无咪、无喇叭、无电池：不能语音、不能报电量。语音板是 Seeed reSpeaker Lite，别搞混。
-  - 板上跑的是 run #16 的固件（带 serial.read 的版本），代码与最新 manifest 一致，只差编译时间戳，不用 OTA。
-- **源码仓**：`legogogo25e/muse-gadget`（private，上游 fork 的独立仓），当前 main head `b0838500`
+  - 板上跑的是 run #27 的固件（上游 `0e50bfc`，带 `device.reboot`），2026-11-10 16:09 OTA 上板、`device.reboot` 同日实测通过。
+- **源码仓**：`legogogo25e/muse-gadget`（private，上游 fork 的独立仓），当前 main head `0e50bfca`
 - **编译发布仓**：`legogogo25e/muse-gadget-build`（public，本仓）
 - **工具链**：ESP-IDF v6.0.3（上游要求，其他版本不行）
 - **固件发布**：GitHub Pages，`https://legogogo25e.github.io/muse-gadget-build/`
@@ -23,7 +23,7 @@
 
 1. **manifest**：`curl -s https://legogogo25e.github.io/muse-gadget-build/manifest.json`
    核对：板子名、版本号、上游 commit、编译时间（UTC 和 HKT 都有）、5 个文件（名字、地址、大小、SHA-256）、flash 参数。
-2. **板子在线状态**：`device.health`（只验在线）、`device.describe`（看命令清单里有没有 `device.ota`、`serial.read`）。
+2. **板子在线状态**：`device.health`（只验在线）、`device.describe`（看命令清单，当前 6 个：`device.discover`、`device.health`、`device.ota`、`device.reboot`、`serial.read`、`serial.write`）。
 3. **板子日志**：直接用 `serial.read` 读板上的 link 日志，**不要再问用户贴 log**。注意：它只返回 diagnostic ring 里 `link.*` 的行，不是整条 console stream，旧 log 会滚动覆盖，单次返回要分页。
 
 ## 编译一次（改了源码后）

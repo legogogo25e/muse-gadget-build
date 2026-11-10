@@ -97,7 +97,9 @@
 - ESP-IDF：`espressif/idf:v6.0.3`
 - 版本：`PROJECT_VER=1.0.0`
 - 结果：成功；耗时 5 分 37 秒（16:01:59–16:07:36 HKT）
-- Pages：manifest 已核对，仍只含 YD，`built_at_hkt` 2026-11-10T16:06:35+08:00；`muse-gadget.bin` 1,380,352 字节，SHA-256 `aed1f809…`。OTA 上板待用户批准。
+- Pages：manifest 已核对，仍只含 YD，`built_at_hkt` 2026-11-10T16:06:35+08:00；`muse-gadget.bin` 1,380,352 字节，SHA-256 `aed1f809…`。
+- OTA 上板（2026-11-10 16:09:36 HKT，用户批准后发 `device.ota {url, force: true}`）：回 `applied`，约 110 秒后回线，`device.health` ok（uptime 112 秒，新启动），`device.describe` 已含 `device.reboot`（6 个命令，证明跑的是新固件，不是回滚）。
+- `device.reboot` 实测（同日 16:12）：发命令回 `{"ok": true}`，60 秒后回线，`device.health` ok（uptime 64 秒），`serial.read` 见全新启动日志（连 LSCMGUEST、IP 192.168.252.53、Noise 握手、`OTA image validated`，0 丢行），闭环完成。
 
 ## 以后每次运行怎么记
 
