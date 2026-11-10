@@ -257,6 +257,7 @@
 
       <section class="card loop-card" aria-label="Closed-loop workflow">
         <h2>Closed loop · Agent development for muse-gadget</h2>
+        <p class="hint" style="margin-top:0;">Routine updates: once a board has been flashed with OTA-enabled firmware, update it with <span class="mono">device.ota</span> — the board downloads the new firmware from Pages over Wi-Fi, no cable needed. This page is for the first flash and for recovery.</p>
         <ol class="loop-steps">
           <li class="loop-step"><b>Edit code</b><span>Changes land in <span class="mono">legogogo25e/muse-gadget</span> — the independent development repo (imported from upstream, not a fork). The build workflow now points there.</span></li>
           <li class="loop-step"><b>Actions build</b><span>GitHub Actions in <span class="mono">muse-gadget-build</span> compiles each board and publishes firmware + <span class="mono">manifest.json</span> to GitHub Pages.</span></li>
@@ -265,7 +266,7 @@
           <li class="loop-step"><b>Acceptance</b><span>Serial output, boot markers and crash / reboot-loop checks run per board (see lamps below).</span></li>
           <li class="loop-step"><b>Report back</b><span>If a report endpoint is configured, results POST automatically after a 10-second observation window — or send manually. That report is what the agent reads to iterate.</span></li>
         </ol>
-        <p class="hint">Honest limits: Web Serial requires <strong>one click per port</strong> to grant access — the browser will not let a page claim USB devices silently, so “fully automatic” starts after you add each board once on this computer. Real hardware flashing is <strong>not yet verified</strong> end-to-end (no USB device on the build side); treat the first run on each board as a supervised test. Use the GitHub Pages top-level copy of this page for real flashing — the muse.ai embedded preview cannot pass the serial permission through.</p>
+        <p class="hint">Honest limits: Web Serial requires <strong>one click per port</strong> to grant access — the browser will not let a page claim USB devices silently, so “fully automatic” starts after you add each board once on this computer. USB flashing has been verified end-to-end on <strong>yd-esp32-s3-classic</strong> (first flash and re-flash via this page, Nov 2026); treat the first run on a new board type as a supervised test. Use the GitHub Pages top-level copy of this page for real flashing — the muse.ai embedded preview cannot pass the serial permission through.</p>
       </section>
 
       <div class="grid">
@@ -316,7 +317,7 @@
               <button class="toggle" id="tgAutoFlash" aria-pressed="false"><span class="sw"></span>Auto-flash when a new build appears</button>
               <button class="toggle" id="tgAutoMon" aria-pressed="true"><span class="sw"></span>Open monitor after flashing</button>
             </div>
-            <p class="hint">Auto-flash only triggers while a device is connected and the serial port is not busy flashing or monitoring; if the monitor is open it is stopped first. Rollback uses the previous firmware bytes kept in this page's memory — it does not need the network and only works while this page stays open.</p>
+            <p class="hint">Auto-flash only triggers while a device is connected and the serial port is not busy flashing or monitoring; if the monitor is open it is stopped first. Rollback uses the previous firmware bytes kept in this page's memory — it does not need the network and only works while this page stays open. If a board already runs OTA-enabled firmware, update it via OTA instead of auto-flash.</p>
           </section>
 
           <section class="card" aria-label="Multi-board manager">
