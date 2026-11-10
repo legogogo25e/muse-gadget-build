@@ -300,11 +300,11 @@ jobs:
           (outdir / "manifest.json").write_text(
               json.dumps(board_manifest, indent=2) + "\n")
 
-            root_manifest = {
-              "repo": "legogogo25e/muse-gadget-build",
-              "updated_at_utc": info.get("built_at_utc"),
-              "updated_at_hkt": info.get("built_at_hkt"),
-              "boards": {board: board_manifest},
+          root_manifest = {
+            "repo": "legogogo25e/muse-gadget-build",
+            "updated_at_utc": info.get("built_at_utc"),
+            "updated_at_hkt": info.get("built_at_hkt"),
+            "boards": {board: board_manifest},
           }
           pathlib.Path("pages/manifest.json").write_text(
               json.dumps(root_manifest, indent=2) + "\n")
