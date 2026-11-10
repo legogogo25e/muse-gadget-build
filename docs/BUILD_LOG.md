@@ -74,6 +74,19 @@
   - `muse-gadget.bin` — 0x20000，1,708,032 字节，SHA-256 `1edce269420bb40369d57a797632123d99b84408f98b05cf6b4f043c006d4c5e`
 - 说明：`ota_data_initial.bin` 会把 OTA 槽位选择重置回 ota_0，没有它，之前从 ota_1 启动过的板子会继续跑旧固件。
 
+## 第 26 次运行（2026-11-10 15:40–15:44 HKT，成功 ✅，重新发布烧录页）
+
+- 日期（HKT）：2026-11-10
+- 工作流：Build ESP32 firmware（`.github/workflows/build-esp32.yml`，手动触发）
+- 运行链接：https://github.com/legogogo25e/muse-gadget-build/actions/runs/42776942717
+- 板子：`yd-esp32-s3-classic`
+- 上游：`legogogo25e/muse-gadget @ b08385006431eb6d133ef43b6129c1fd5c0a8ca0`
+- ESP-IDF：`espressif/idf:v6.0.3`
+- 版本：`PROJECT_VER=1.0.0`
+- 结果：成功；耗时 4 分 02 秒（15:40:35–15:44:37 HKT）
+- 目的：重新发布 Pages，让更新过的 `flasher.html` 上线（说明 OTA 是日常更新路径、YD USB 烧录已实机验证，commit `6eebb3c`）。固件代码没变，只是重编一次；manifest 仍只含 YD，`built_at_hkt` 2026-11-10T15:44:04+08:00；线上烧录页已核对，三处新文案都在，旧的 “not yet verified” 已消失。
+- 注意：第 5 至 25 次运行（私有化验证、HKT 时间戳、serial.read 等）未逐一记入本文件，见主聊天记录；下次起恢复逐次记录。
+
 ## 以后每次运行怎么记
 
 复制上面一段，填：日期、运行链接、板子、上游 commit、版本、结果、耗时、产物名、`.bin` 大小和 SHA-256。只改版本号不改上游时，OTA 会因版本门跳过安装，记得涨 `project_version`。
