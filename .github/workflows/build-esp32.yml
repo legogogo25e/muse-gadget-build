@@ -158,12 +158,11 @@ jobs:
           } > build-info.txt
           ls -lh "build-$BOARD/muse-gadget.bin" "build-$BOARD/bootloader/bootloader.bin" "build-$BOARD/partition_table/partition-table.bin" "build-$BOARD/flasher_args.json"
           sha256sum "build-$BOARD/muse-gadget.bin" | tee -a build-info.txt
-          
-          cat build-info.txt
+                    cat build-info.txt
 
       - name: Upload firmware artifact
         uses: actions/upload-artifact@v4
-        with:
+      with:
           name: firmware-${{ env.BOARD }}-${{ env.PROJECT_VER }}
           path: |
             upstream/esp32/build-${{ env.BOARD }}/muse-gadget.bin
@@ -301,8 +300,7 @@ jobs:
           (outdir / "manifest.json").write_text(
               json.dumps(board_manifest, indent=2) + "\n")
 
-          root_manifest = {
-              "repo": "legogogo25e/muse-gadget-build",
+          root_manifest = {              "repo": "legogogo25e/muse-gadget-build",
               "updated_at_utc": info.get("built_at_utc"),
               "updated_at_hkt": info.get("built_at_hkt"),
               "boards": {board: board_manifest},
@@ -314,8 +312,7 @@ jobs:
           index = f"""<!doctype html><html lang="en"><head><meta charset="utf-8">
           <title>muse-gadget-build firmware</title></head><body>
           <h1>muse-gadget-build firmware</h1>
-          <p>Latest build: board <b>{board}</b>, version
-          <b>{info.get("project_version")}</b>, built
+          <p>Latest build: board <b>{board}</b>, version          <b>{info.get("project_version")}</b>, built
           {info.get("built_at_utc")} UTC.
           <a href="manifest.json">manifest.json</a> |
           <a href="firmware/{board}/manifest.json">board manifest</a></p>
